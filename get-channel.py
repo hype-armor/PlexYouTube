@@ -34,20 +34,24 @@ with open('Channels_to_DL.txt', "r") as f:
         c = Channel(line)
         
         for video in c.videos:
-            if (video.publish_date >= thirty_days_ago):
-                print ('Downloading:', video.title)
-                title = slugify(video.title)
-                video.streams.get_highest_resolution().download(c.channel_name + ' [UC' + c.channel_id + ']', title + ' [' + video.video_id + '].mp4')
-                # import ffmpeg
-                # video_stream = ffmpeg.input('The Hospitals IT Staff hates me.mp4')
-                # audio_stream = ffmpeg.input('The Hospitals IT Staff hates me.webm')
-                # ffmpeg.output(audio_stream, video_stream, 'out.mp4').run()
-            else:
-                break
-            if 'str' in line:
-                break
+            try:
+                if (video.publish_date >= thirty_days_ago):
+                    print ('Downloading:', video.title)
+                    title = slugify(video.title)
+                    #video.streams.get_highest_resolution().download(c.channel_name + ' [UC' + c.channel_id + ']', title + ' [' + video.video_id + '].mp4')
+                    # import ffmpeg
+                    # video_stream = ffmpeg.input('The Hospitals IT Staff hates me.mp4')
+                    # audio_stream = ffmpeg.input('The Hospitals IT Staff hates me.webm')
+                    # ffmpeg.output(audio_stream, video_stream, 'out.mp4').run()
+                else:
+                    break
+                if 'str' in line:
+                    break
+            except:
+                print ('Error downloading:', video.title)
 
-
+def check_if_exists(video):
+    video.title = slugify(video.title)
 
 
     #print (video.publish_date >= thirty_days_ago)
