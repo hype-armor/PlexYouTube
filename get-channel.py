@@ -1,5 +1,7 @@
 from pytube import YouTube, Channel
 from datetime import datetime, timedelta
+import curses, time
+
 
 import os, ssl
 if (not os.environ.get('PYTHONHTTPSVERIFY', '') and
@@ -9,50 +11,99 @@ if (not os.environ.get('PYTHONHTTPSVERIFY', '') and
 import unicodedata
 import re
 
-def slugify(value, allow_unicode=False):
-    """
-    Taken from https://github.com/django/django/blob/master/django/utils/text.py
-    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
-    dashes to single dashes. Remove characters that aren't alphanumerics,
-    underscores, or hyphens. Convert to lowercase. Also strip leading and
-    trailing whitespace, dashes, and underscores.
-    """
-    value = str(value)
-    if allow_unicode:
-        value = unicodedata.normalize('NFKC', value)
-    else:
-        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
-    value = re.sub(r'[^\w\s-]', '', value.lower())
-    return re.sub(r'[-\s]+', '-', value).strip('-_')
+# Initialize curses
+stdscr = curses.initscr()
+# Get the size of the window
+height, width = stdscr.getmaxyx()
 
+locations = {
+    "app_title": (1, 1),
+    "current_action": (3, 3),
+    "channel": (2, 2),
+    "video": (4, 4),
+    "history": (height-1, 1)
+}
+history = []
+
+# Move cursor to position (1, 1)
+def move_cursor(item):
+    stdscr.move(locations[item][0], locations[item][1])
+
+def clear_text(item):
+    stdscr.move(locations[item][0], locations[item][1])
+    stdscr.clrtoeol()
+
+# Write "test" at that position
+def update_text(string, item):
+    
+    #stdscr.refresh()
+    max_length = 5
+    string.ljust(max_length)
+    
+    max_chars = width - locations[item][1] - 1
+    string = string[:max_chars]
+    
+    if len(history) == height - 7:
+        history.pop(0)
+    history.append(string)
+
+    stdscr.refresh()
+    time.sleep(0.04) # don't ask me why this is needed, but it is.
+    stdscr.move(locations['history'][0] - len(history), 0)
+    stdscr.clrtobot()
+    move_cursor("history")
+    for i in range(0, len(history)):
+        ypos = (locations['history'][0] - i) -1
+        stdscr.move(ypos, locations['history'][1])
+        stdscr.addstr(history[i])
+
+    clear_text(item)
+    move_cursor(item)
+    stdscr.addstr(string)
+    
+    # Refresh the screen to see the changes
+    stdscr.refresh()
+
+def parse_to_filename(s):
+    # Pattern to match all invalid filename characters
+    pattern = r'[<>:"/\\|?*]'
+
+    # Use re.sub() to replace the pattern with an empty string
+    return re.sub(pattern, '', s)
+   
+
+update_text("YouTube Downloader!", "app_title")
+time.sleep(1)
+update_text("Starting Up", "history")
+ 
 today = datetime.now()
-thirty_days_ago = today - timedelta(days=10)
+thirty_days_ago = today - timedelta(days=9000)
 
-with open('Channels_to_DL.txt', "r") as f:
+with open('Wantallvids.txt', "r") as f:
     for line in f:
-        print(line)
         c = Channel(line)
-        
+        update_text(c.channel_name, "channel")
+        update_text('Searching', "current_action")
         for video in c.videos:
             try:
-                if (video.publish_date >= thirty_days_ago):
-                    print ('Downloading:', video.title)
-                    title = slugify(video.title)
-                    #video.streams.get_highest_resolution().download(c.channel_name + ' [UC' + c.channel_id + ']', title + ' [' + video.video_id + '].mp4')
-                    # import ffmpeg
-                    # video_stream = ffmpeg.input('The Hospitals IT Staff hates me.mp4')
-                    # audio_stream = ffmpeg.input('The Hospitals IT Staff hates me.webm')
-                    # ffmpeg.output(audio_stream, video_stream, 'out.mp4').run()
-                else:
+                title = parse_to_filename(video.title)
+                
+                if os.path.exists(c.channel_name + '\\' + title + '.mp4'):
+                    update_text('SKIPPING: ' + title, "video")
+                    continue
+
+                # if we won't have the video, see if it's too old.
+                if (video.publish_date < thirty_days_ago):
+                    update_text('SKIPPING TOO OLD: ' + title, "video")
                     break
+
+                update_text('Downloading: ' + video.title, "current_action")
+                video.streams.get_highest_resolution().download(c.channel_name, title + '.mp4', timeout=60)
+                time.sleep(1)
+                update_text('Searching', "current_action")
                 if 'str' in line:
                     break
-            except:
-                print ('Error downloading:', video.title)
-
-def check_if_exists(video):
-    video.title = slugify(video.title)
-
-
-    #print (video.publish_date >= thirty_days_ago)
-    #video.streams.first().download()
+            except Exception as e:
+                update_text('Error Downloading: ' + video.title, "current_action")
+                if hasattr(e, 'error_string'):
+                    update_text(e.error_string, "current_action")
